@@ -2,7 +2,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE DataKinds #-}
-module Control.Eff.Internal.Eff (Eff(..),run,send) where
+module Control.Eff.Internal.Eff (Eff(..),run,runM,send) where
 
 import TypeFun.Data.List (Elem)
 import Control.Eff.Internal.Union
@@ -29,6 +29,10 @@ instance Monad (Eff r) where
 run :: Eff '[] a -> a
 run (Pure x) = x
 run (Eff _ _) = error "User is a magician"
+
+runM :: Monad m => Eff '[m] a -> m a
+runM (Pure x) = return x
+runM (Eff u q) = extract u >>= runM . runTCQ q
 
 send :: Member q r => q a -> Eff r a
 send qa = Eff (inject qa) (Singleton Pure)

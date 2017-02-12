@@ -2,15 +2,16 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}
-module Control.Eff.Internal.Union (Union(..),Member,project,inject) where
+module Control.Eff.Internal.Union (Union(..),Member,project,inject,extract) where
 import Data.Proxy
-import TypeFun.Data.List hiding (Union)
+import TypeFun.Data.List hiding (Union,IndexOf)
 import TypeFun.Data.Peano
 
 data Union (r :: [* -> *]) a where
@@ -30,14 +31,28 @@ instance (r ~ (r' ': rs),MemberAt q r n) => MemberAt q (x ': r) ('S n) where
   injectAt _ = Weaken . injectAt (Proxy :: Proxy n)
   projectAt _ (Inject _) = Nothing
   projectAt _ (Weaken x) = projectAt (Proxy :: Proxy n) x
+
+type family IndexOf (q :: * -> *) r :: N where
+  IndexOf q (q ': r) = 'Z
+  IndexOf q (_ ': r) = 'S (IndexOf q r)
   
-class (MemberAt q r (IndexOf q r)) => Member q r where
+type family Head (xs :: [x]) :: x where
+  Head (x ': _) = x
+
+type family Tail (xs :: [x]) :: [x] where
+  Tail (_ ': xs) = xs
+
+class (MemberAt q r (IndexOf q r), r ~ (Head r ': Tail r)) => Member q r where
   inject :: q a -> Union r a
   project :: Union r a -> Maybe (q a)
 
-instance (MemberAt q r (IndexOf q r)) => Member q r where
+instance (MemberAt q r (IndexOf q r),r ~ (Head r ': Tail r)) => Member q r where
   inject = injectAt (Proxy :: Proxy (IndexOf q r))
   project = projectAt (Proxy :: Proxy (IndexOf q r))
+
+extract :: Union '[q] a -> q a
+extract (Inject qa) = qa
+-- extract (Weaken _) = error "Even the typechecker knows this is impossible :P"
 
 {-
 --type Member q r = Index (IndexOf q r) r ~ q
