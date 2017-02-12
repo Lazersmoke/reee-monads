@@ -7,8 +7,9 @@ module Control.Eff.State
   ,get
   ,put
   ,modify
-  ,runStateStrictly
-  ,runStateLazily
+  ,runState,runState'
+  ,execState,execState'
+  ,evalState,evalState'
   ) where
 
 import Control.Eff
@@ -26,15 +27,21 @@ put = send . Put
 modify :: Member (State s) r => (s -> s) -> Eff r ()
 modify f = put . f =<< get
 
-runStateStrictly :: s -> Eff (State s ': r) a -> Eff r a
-runStateStrictly = runState True
+execState', execState :: s -> Eff (State s ': r) a -> Eff r s
+execState' s e = snd <$> runState' s e
+execState s e = snd <$> runState s e
 
-runStateLazily :: s -> Eff (State s ': r) a -> Eff r a
-runStateLazily = runState False
+evalState', evalState :: s -> Eff (State s ': r) a -> Eff r a
+evalState' s e = fst <$> runState' s e
+evalState s e = fst <$> runState s e
 
-runState :: Bool -> s -> Eff (State s ': r) a -> Eff r a
-runState strict s (Pure x) = Pure $ (if strict then seq s else id) x
-runState strict s (Eff u q) = (if strict then seq s else id) $ case u of
-  Inject Get -> runState strict s (runTCQ q s)
-  Inject (Put s') -> runState strict s' (runTCQ q ())
-  Weaken u' -> Eff u' (Singleton (runState strict s . runTCQ q))
+runState', runState :: s -> Eff (State s ': r) a -> Eff r (a,s)
+runState' = runStateCore True
+runState = runStateCore False
+
+runStateCore :: Bool -> s -> Eff (State s ': r) a -> Eff r (a,s)
+runStateCore strict s (Pure x) = Pure ((if strict then seq s else id) x,s)
+runStateCore strict s (Eff u q) = (if strict then seq s else id) $ case u of
+  Inject Get -> runStateCore strict s (runTCQ q s)
+  Inject (Put s') -> runStateCore strict s' (runTCQ q ())
+  Weaken u' -> Eff u' (Singleton (runStateCore strict s . runTCQ q))

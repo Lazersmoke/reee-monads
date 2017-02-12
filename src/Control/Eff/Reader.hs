@@ -6,8 +6,7 @@ module Control.Eff.Reader
   (Reader
   ,ask
   ,reader
-  ,runReaderStrictly
-  ,runReaderLazily
+  ,runReader,runReader'
   ) where
 
 import Control.Eff
@@ -34,14 +33,12 @@ reader = (<$> ask)
         --Nothing -> Eff u (Singleton (loop . runTCQ q))
   --loop m
 
-runReaderStrictly :: e -> Eff (Reader e ': r) a -> Eff r a
-runReaderStrictly = runReader True
+runReader', runReader :: e -> Eff (Reader e ': r) a -> Eff r a
+runReader' = runReaderCore True
+runReader = runReaderCore False
 
-runReaderLazily :: e -> Eff (Reader e ': r) a -> Eff r a
-runReaderLazily = runReader False
-
-runReader :: Bool -> e -> Eff (Reader e ': r) a -> Eff r a
-runReader strict e (Pure x) = Pure . (if strict then seq e else id) $ x
-runReader strict e (Eff u q) = (if strict then seq e else id) $ case u of
-  Inject Ask -> runReader strict e (runTCQ q e)
-  Weaken u' -> Eff u' (Singleton (runReader strict e . runTCQ q))
+runReaderCore :: Bool -> e -> Eff (Reader e ': r) a -> Eff r a
+runReaderCore strict e (Pure x) = Pure . (if strict then seq e else id) $ x
+runReaderCore strict e (Eff u q) = (if strict then seq e else id) $ case u of
+  Inject Ask -> runReaderCore strict e (runTCQ q e)
+  Weaken u' -> Eff u' (Singleton (runReaderCore strict e . runTCQ q))
