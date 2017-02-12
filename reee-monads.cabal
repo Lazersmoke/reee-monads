@@ -15,7 +15,7 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Control.Eff
+  exposed-modules:     Control.Eff, Control.Eff.Reader, Control.Eff.State, Control.Eff.Trace
   other-modules:       Control.Eff.Internal.Eff, Control.Eff.Internal.TCQ, Control.Eff.Internal.Union
   build-depends:       base >= 4.7 && < 5, type-fun
   default-language:    Haskell2010
