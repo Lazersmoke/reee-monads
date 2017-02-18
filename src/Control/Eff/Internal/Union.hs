@@ -8,66 +8,95 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 module Control.Eff.Internal.Union (Union(..),Member,project,inject,extract) where
-import Data.Proxy
-import TypeFun.Data.List hiding (Union,IndexOf)
-import TypeFun.Data.Peano
 
 data Union (r :: [* -> *]) a where
   Inject :: q a -> Union (q ': r) a
   Weaken :: Union (r ': s) a -> Union (x ': r ': s) a
 
-class MemberAt q r (n :: N) where
-  injectAt :: Proxy n -> q a -> Union r a
-  projectAt :: Proxy n -> Union r a -> Maybe (q a)
+data N = Z | S N
 
-instance MemberAt q (q ': r) 'Z where
-  injectAt _ = Inject
-  projectAt _ (Inject a) = Just a
-  projectAt _ (Weaken _) = Nothing
+class MemberAt (n :: N) q r where
+  injectAt :: forall a. q a -> Union r a
+  projectAt :: forall a. Union r a -> Maybe (q a)
 
-instance (r ~ (r' ': rs),MemberAt q r n) => MemberAt q (x ': r) ('S n) where
-  injectAt _ = Weaken . injectAt (Proxy :: Proxy n)
-  projectAt _ (Inject _) = Nothing
-  projectAt _ (Weaken x) = projectAt (Proxy :: Proxy n) x
+instance MemberAt 'Z q (q ': r) where
+  injectAt = Inject
+  projectAt (Inject a) = Just a
+  projectAt (Weaken _) = Nothing
 
-type family IndexOf (q :: * -> *) r :: N where
-  IndexOf q (q ': r) = 'Z
-  IndexOf q (_ ': r) = 'S (IndexOf q r)
-  
+instance (r ~ (r' ': rs),MemberAt n q r) => MemberAt ('S n) q (x ': r) where
+  injectAt = Weaken . injectAt @n
+  projectAt (Inject _) = Nothing
+  projectAt (Weaken x) = projectAt @n x
+
+-- Begin type wizardry 
+-- Credit to:
+-- https://github.com/AndrasKovacs/misc-stuff/blob/master/haskell/Eff/EffInference.hs
+data Entry = Apply | forall x. Single x
+
+-- Preord turns a type into a unary application list version of itself
+-- Turns `Either Int String` into '[Apply,Apply,Either,Int,String]
+-- Turns `Maybe [Cat]` into '[Apply,Maybe,Apply,List,Cat]
+type family Preord (x :: k) :: [Entry] where
+  Preord (f x) = Apply ': (Preord f ++ Preord x)
+  Preord x = '[Single x]
+
+-- Map Preord xs
+type family PreordList (xs :: [a]) :: [[Entry]] where
+  PreordList '[] = '[]
+  PreordList (x ': xs) = Preord x ': PreordList xs
+
+-- Annotate each element with an index
+-- Elements will get shuffled by Narrow, so we must maintain the original index this way
+type family IndexAnn (xs :: [a]) (i :: N) :: [(N,a)] where
+  IndexAnn '[] _ = '[]
+  IndexAnn (x ': xs) i = '(i,x) ': IndexAnn xs ('S i)
+
+-- Filter for containing the entry
+type family Narrow (e :: Entry) (xs :: [(N,[Entry])]) :: [(N,[Entry])] where
+  -- Filtering [] is []
+  Narrow _ '[] = '[]
+  -- If the search entry and the current one match, add to list, otherwise, throw it out
+  Narrow e ('(i,e' ': es) ': ess) = If (e == e') '[ '(i,es)] '[] ++ Narrow e ess
+
+type family FindPreord (es :: [Entry]) (ess :: [(N,[Entry])]) :: N where
+  -- If there is only one item left after all the narrowings, it must be the right one
+  FindPreord _ '[ '(i,_)] = i
+  -- Filter out the ones that don't match. Get stuck if we have multiple matches or none
+  FindPreord (e ': es) ess = FindPreord es (Narrow e ess)
+
+type Find x ys = FindPreord (Preord x) (IndexAnn (PreordList ys) 'Z)
+
+type family If (b :: Bool) (t :: k) (f :: k) :: k where
+  If True t _ = t
+  If False _ f = f
+
+type family (x :: k) == (y :: j) :: Bool where
+  x == x = True
+  _ == _ = False
+
+type family (xs :: [k]) ++ (ys :: [k]) :: [k] where
+  '[] ++ ys = ys
+  (x ': xs) ++ ys = x ': xs ++ ys
+
 type family Head (xs :: [x]) :: x where
   Head (x ': _) = x
 
 type family Tail (xs :: [x]) :: [x] where
   Tail (_ ': xs) = xs
 
-class (MemberAt q r (IndexOf q r), r ~ (Head r ': Tail r)) => Member q r where
-  inject :: q a -> Union r a
-  project :: Union r a -> Maybe (q a)
+type Member q r = MemberAt (Find q r) q r
 
-instance (MemberAt q r (IndexOf q r),r ~ (Head r ': Tail r)) => Member q r where
-  inject = injectAt (Proxy :: Proxy (IndexOf q r))
-  project = projectAt (Proxy :: Proxy (IndexOf q r))
+inject :: forall q r a. Member q r => q a -> Union r a
+inject = injectAt @(Find q r)
+
+project :: forall q r a. Member q r => Union r a -> Maybe (q a)
+project = projectAt @(Find q r)
 
 extract :: Union '[q] a -> q a
 extract (Inject qa) = qa
 -- extract (Weaken _) = error "Even the typechecker knows this is impossible :P"
-
-{-
---type Member q r = Index (IndexOf q r) r ~ q
-
-class Member q r where
-  inject :: q a -> Union r a
-  project :: Union r a -> Maybe (q a)
-
-instance ((IndexOf q r) ~ Z) => Member q r where
-  inject = _
-  project (Inject a) = _
-  project (Weaken _) = _
-
-instance Member q r => Member q (x ': r) where
-  inject = _
-  project (Inject _) = Nothing
-  project (Weaken x) = _
--}
