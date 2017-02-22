@@ -5,7 +5,6 @@
 {-# LANGUAGE DataKinds #-}
 module Control.Eff.Internal.Eff (Eff(..),run,runM,send) where
 
-import TypeFun.Data.List (Elem)
 import Control.Eff.Internal.Union
 import Control.Eff.Internal.TCQ
 

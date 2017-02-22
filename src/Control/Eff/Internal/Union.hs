@@ -42,8 +42,8 @@ data Entry = Apply | forall x. Single x
 -- Turns `Either Int String` into '[Apply,Apply,Either,Int,String]
 -- Turns `Maybe [Cat]` into '[Apply,Maybe,Apply,List,Cat]
 type family Preord (x :: k) :: [Entry] where
-  Preord (f x) = Apply ': (Preord f ++ Preord x)
-  Preord x = '[Single x]
+  Preord (f x) = 'Apply ': (Preord f ++ Preord x)
+  Preord x = '[ 'Single x]
 
 -- Map Preord xs
 type family PreordList (xs :: [a]) :: [[Entry]] where
@@ -72,12 +72,12 @@ type family FindPreord (es :: [Entry]) (ess :: [(N,[Entry])]) :: N where
 type Find x ys = FindPreord (Preord x) (IndexAnn (PreordList ys) 'Z)
 
 type family If (b :: Bool) (t :: k) (f :: k) :: k where
-  If True t _ = t
-  If False _ f = f
+  If 'True t _ = t
+  If 'False _ f = f
 
 type family (x :: k) == (y :: j) :: Bool where
-  x == x = True
-  _ == _ = False
+  x == x = 'True
+  _ == _ = 'False
 
 type family (xs :: [k]) ++ (ys :: [k]) :: [k] where
   '[] ++ ys = ys
