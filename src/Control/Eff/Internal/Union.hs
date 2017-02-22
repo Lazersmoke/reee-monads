@@ -91,12 +91,15 @@ type family Tail (xs :: [x]) :: [x] where
 
 type Member q r = MemberAt (Find q r) q r
 
+{-# INLINE inject #-}
 inject :: forall q r a. Member q r => q a -> Union r a
 inject = injectAt @(Find q r)
 
+{-# INLINE project #-}
 project :: forall q r a. Member q r => Union r a -> Maybe (q a)
 project = projectAt @(Find q r)
 
+{-# INLINE extract #-}
 extract :: Union '[q] a -> q a
 extract (Inject qa) = qa
 -- extract (Weaken _) = error "Even the typechecker knows this is impossible :P"
