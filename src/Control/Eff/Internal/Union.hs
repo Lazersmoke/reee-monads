@@ -19,7 +19,7 @@ data Union (r :: [* -> *]) a where
 
 data N = Z | S N
 
-class MemberAt (n :: N) q r where
+class r ~ (Head r ': Tail r) => MemberAt (n :: N) q r where
   injectAt :: forall a. q a -> Union r a
   projectAt :: forall a. Union r a -> Maybe (q a)
 
@@ -96,19 +96,15 @@ type family SimpleFind (x :: a) (xs :: [a]) :: N where
 type UniqueMember q r = MemberAt (Find q r) q r
 type Member q r = MemberAt (SimpleFind q r) q r
 
-{-# INLINE inject #-}
 inject :: forall q r a. Member q r => q a -> Union r a
 inject = injectAt @(SimpleFind q r)
 
-{-# INLINE injectUnique #-}
 injectUnique :: forall q r a. UniqueMember q r => q a -> Union r a
 injectUnique = injectAt @(Find q r)
 
-{-# INLINE project #-}
 project :: forall q r a. Member q r => Union r a -> Maybe (q a)
 project = projectAt @(SimpleFind q r)
 
-{-# INLINE projectUnique #-}
 projectUnique :: forall q r a. UniqueMember q r => Union r a -> Maybe (q a)
 projectUnique = projectAt @(Find q r)
 
