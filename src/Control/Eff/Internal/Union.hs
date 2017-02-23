@@ -11,7 +11,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
-module Control.Eff.Internal.Union (Union(..),Member,project,inject,extract) where
+module Control.Eff.Internal.Union (Union(..),Member,project,projectUnique,inject,injectUnique,extract) where
 
 data Union (r :: [* -> *]) a where
   Inject :: q a -> Union (q ': r) a
@@ -89,15 +89,28 @@ type family Head (xs :: [x]) :: x where
 type family Tail (xs :: [x]) :: [x] where
   Tail (_ ': xs) = xs
 
-type Member q r = MemberAt (Find q r) q r
+type family SimpleFind (x :: a) (xs :: [a]) :: N where
+  SimpleFind x (x : _) = 'Z
+  SimpleFind x (_ : xs) = 'S (SimpleFind x xs)
+
+type UniqueMember q r = MemberAt (Find q r) q r
+type Member q r = MemberAt (SimpleFind q r) q r
 
 {-# INLINE inject #-}
 inject :: forall q r a. Member q r => q a -> Union r a
-inject = injectAt @(Find q r)
+inject = injectAt @(SimpleFind q r)
+
+{-# INLINE injectUnique #-}
+injectUnique :: forall q r a. UniqueMember q r => q a -> Union r a
+injectUnique = injectAt @(Find q r)
 
 {-# INLINE project #-}
 project :: forall q r a. Member q r => Union r a -> Maybe (q a)
-project = projectAt @(Find q r)
+project = projectAt @(SimpleFind q r)
+
+{-# INLINE projectUnique #-}
+projectUnique :: forall q r a. UniqueMember q r => Union r a -> Maybe (q a)
+projectUnique = projectAt @(Find q r)
 
 {-# INLINE extract #-}
 extract :: Union '[q] a -> q a
