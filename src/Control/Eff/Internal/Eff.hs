@@ -3,7 +3,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE DataKinds #-}
-module Control.Eff.Internal.Eff (Eff(..),run,runM,send) where
+module Control.Eff.Internal.Eff (Eff(..),run,runM,runTCQ,send) where
 
 import Control.Eff.Internal.Union
 import Control.Eff.Internal.TCQ
@@ -30,6 +30,14 @@ instance Monad (Eff r) where
   {-# INLINE (>>=) #-}
   Pure x >>= f = f x
   Eff u q >>= f = Eff u (Then q (Singleton f))
+
+{-# INLINE runTCQ #-}
+runTCQ :: TCQ (Eff r) a b -> a -> Eff r b
+runTCQ tcq x = case viewl tcq of
+  FirstL k -> k x
+  ConsL k t -> case k x of
+    Pure n -> runTCQ t n
+    Eff u q -> Eff u (Then q t)
 
 run :: Eff '[] a -> a
 run (Pure x) = x
